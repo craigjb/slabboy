@@ -104,8 +104,6 @@ class CPU(bootVector: Int, spInit: Int) extends Component {
 
 object TopLevelVerilog {
   def main(args: Array[String]) {
-    SpinalConfig()
-      .dumpWave(vcdPath = "wave.vcd")
-      .generateVerilog(new SlabBoy)
+    SpinalConfig().generateVerilog(new SlabBoy)
   }
 }
