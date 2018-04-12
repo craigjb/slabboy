@@ -13,8 +13,11 @@ object TopLevelSim {
 
   def main(args: Array[String]) {
     SimConfig.withWave.compile(new SlabBoy).doSim { dut =>
+      // perform initial reset and generate a clock signal
       dut.clockDomain.forkStimulus(period = 2)
       
+      // create a concurrent thread to handle the memory accesses
+      // separate from the main test bench execution
       val memThread = fork {
         val memory = loadProgram("sw/test.gb")
         while (true) {
