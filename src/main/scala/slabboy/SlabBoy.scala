@@ -2,6 +2,7 @@ package slabboy
 
 import spinal.core._
 import spinal.lib._
+import spinal.lib.fsm._
 
 class SlabBoy extends Component {
   val io = new Bundle {
@@ -49,6 +50,11 @@ class CPU(bootVector: Int, spInit: Int) extends Component {
     val mreq = out Bool
   }
 
+  val address = Reg(UInt(16 bits)) init(0)
+  val mreq = Reg(Bool) init(False)
+  io.address := address
+  io.mreq := mreq
+
   // instruction register
   val ir = RegInit(U(0x00, 8 bits))
 
@@ -66,6 +72,34 @@ class CPU(bootVector: Int, spInit: Int) extends Component {
   val registers8 = registers16.flatMap(
     reg16 => Seq(reg16(15 downto 8), reg16(7 downto 0))
   )
+
+  val tCycleFsm = new StateMachine {
+    val t0State: State = new State with EntryPoint {
+      whenIsActive {
+        address := registers16(Reg16.PC)
+        mreq := True
+        goto(t1State)
+      }
+    }
+    val t1State = new State {
+      whenIsActive {
+        mreq := False
+        goto(t2State)
+      }
+    }
+    val t2State = new State {
+      whenIsActive {
+        ir := io.dataIn
+        registers16(Reg16.PC) := registers16(Reg16.PC) + 1
+        goto(t3State)
+      }
+    }
+    val t3State = new State {
+      whenIsActive {
+        goto(t0State)
+      }
+    }
+  }
 }
 
 object TopLevelVerilog {
