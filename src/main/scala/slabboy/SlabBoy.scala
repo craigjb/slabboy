@@ -84,13 +84,13 @@ class CPU(bootVector: Int, spInit: Int) extends Component {
     val t1State = new State {
       whenIsActive {
         mreq := False
+        registers16(Reg16.PC) := registers16(Reg16.PC) + 1
         goto(t2State)
       }
     }
     val t2State = new State {
       whenIsActive {
         ir := io.dataIn
-        registers16(Reg16.PC) := registers16(Reg16.PC) + 1
         goto(t3State)
       }
     }
