@@ -115,7 +115,11 @@ class Cpu(bootVector: Int, spInit: Int) extends Component {
     }
     val t2State = new State {
       whenIsActive {
-        ir := io.dataIn
+        when(decoder.io.memRead) {
+          temp := io.dataIn
+        }.otherwise {
+          ir := io.dataIn
+        }
         registers16(Reg16.PC) := registers16(Reg16.PC) + 1
         goto(t3State)
       }
@@ -147,8 +151,15 @@ object CpuDecoder {
   case class MCycle(
     aluOp: SpinalEnumElement[AluOp.type],
     opBSelect: Option[Int],
-    storeSelect: Option[Int]
+    storeSelect: Option[Int],
+    memRead: Boolean
   )
+
+  def fetchCycle(aluOp: SpinalEnumElement[AluOp.type],
+                 opBSelect: Option[Int],
+                 storeSelect: Option[Int]) = {
+    MCycle(aluOp, opBSelect, storeSelect, false)
+  }
 
   // helper function for the regular op code pattern
   // used for the bulk of the arithmetic instructions
@@ -157,52 +168,72 @@ object CpuDecoder {
                     ) : Seq[(Int, Seq[MCycle])] = {
     val store = if (aluOp == AluOp.Cp) { None } else { Some(Reg8.A) }
     Seq(
-      (base + 0, Seq(MCycle(aluOp, Some(Reg8.B), store))),
-      (base + 1, Seq(MCycle(aluOp, Some(Reg8.C), store))),
-      (base + 2, Seq(MCycle(aluOp, Some(Reg8.D), store))),
-      (base + 3, Seq(MCycle(aluOp, Some(Reg8.E), store))),
-      (base + 4, Seq(MCycle(aluOp, Some(Reg8.H), store))),
-      (base + 5, Seq(MCycle(aluOp, Some(Reg8.L), store))),
+      (base + 0, Seq(fetchCycle(aluOp, Some(Reg8.B), store))),
+      (base + 1, Seq(fetchCycle(aluOp, Some(Reg8.C), store))),
+      (base + 2, Seq(fetchCycle(aluOp, Some(Reg8.D), store))),
+      (base + 3, Seq(fetchCycle(aluOp, Some(Reg8.E), store))),
+      (base + 4, Seq(fetchCycle(aluOp, Some(Reg8.H), store))),
+      (base + 5, Seq(fetchCycle(aluOp, Some(Reg8.L), store))),
       // TODO indirect (hl)
-      (base + 7, Seq(MCycle(aluOp, Some(Reg8.A), store)))
+      (base + 7, Seq(fetchCycle(aluOp, Some(Reg8.A), store)))
     )
   }
 
   val Microcode = Seq(
     // nop
-    (0x00, Seq(MCycle(AluOp.Nop, None, None))),
-
-    // inc b
-    (0x04, Seq(MCycle(AluOp.Inc, Some(Reg8.B), Some(Reg8.B)))),
-    // inc c
-    (0x0C, Seq(MCycle(AluOp.Inc, Some(Reg8.C), Some(Reg8.C)))),
-    // inc d
-    (0x14, Seq(MCycle(AluOp.Inc, Some(Reg8.D), Some(Reg8.D)))),
-    // inc e
-    (0x1C, Seq(MCycle(AluOp.Inc, Some(Reg8.E), Some(Reg8.E)))),
-    // inc h
-    (0x24, Seq(MCycle(AluOp.Inc, Some(Reg8.H), Some(Reg8.H)))),
-    // inc l
-    (0x2C, Seq(MCycle(AluOp.Inc, Some(Reg8.L), Some(Reg8.L)))),
-    // TODO inc (hl)
-    // inc a
-    (0x3C, Seq(MCycle(AluOp.Inc, Some(Reg8.A), Some(Reg8.A)))),
-
-    // dec b
-    (0x05, Seq(MCycle(AluOp.Dec, Some(Reg8.B), Some(Reg8.B)))),
-    // dec c
-    (0x0D, Seq(MCycle(AluOp.Dec, Some(Reg8.C), Some(Reg8.C)))),
-    // dec d
-    (0x15, Seq(MCycle(AluOp.Dec, Some(Reg8.D), Some(Reg8.D)))),
-    // dec e
-    (0x1D, Seq(MCycle(AluOp.Dec, Some(Reg8.E), Some(Reg8.E)))),
-    // dec h
-    (0x25, Seq(MCycle(AluOp.Dec, Some(Reg8.H), Some(Reg8.H)))),
-    // dec l
-    (0x2D, Seq(MCycle(AluOp.Dec, Some(Reg8.L), Some(Reg8.L)))),
-    // TODO dec (hl)
-    // dec a
-    (0x3D, Seq(MCycle(AluOp.Dec, Some(Reg8.A), Some(Reg8.A))))
+    (0x00, Seq(fetchCycle(AluOp.Nop, None, None))),
+    // inc B
+    (0x04, Seq(fetchCycle(AluOp.Inc, Some(Reg8.B), Some(Reg8.B)))),
+    // inc B
+    (0x0C, Seq(fetchCycle(AluOp.Inc, Some(Reg8.C), Some(Reg8.C)))),
+    // inc D
+    (0x14, Seq(fetchCycle(AluOp.Inc, Some(Reg8.D), Some(Reg8.D)))),
+    // inc E
+    (0x1C, Seq(fetchCycle(AluOp.Inc, Some(Reg8.E), Some(Reg8.E)))),
+    // inc H
+    (0x24, Seq(fetchCycle(AluOp.Inc, Some(Reg8.H), Some(Reg8.H)))),
+    // inc L
+    (0x2C, Seq(fetchCycle(AluOp.Inc, Some(Reg8.L), Some(Reg8.L)))),
+    // TODO inc (HL)
+    // inc A
+    (0x3C, Seq(fetchCycle(AluOp.Inc, Some(Reg8.A), Some(Reg8.A)))),
+    // dec B
+    (0x05, Seq(fetchCycle(AluOp.Dec, Some(Reg8.B), Some(Reg8.B)))),
+    // dec C
+    (0x0D, Seq(fetchCycle(AluOp.Dec, Some(Reg8.C), Some(Reg8.C)))),
+    // dec D
+    (0x15, Seq(fetchCycle(AluOp.Dec, Some(Reg8.D), Some(Reg8.D)))),
+    // dec E
+    (0x1D, Seq(fetchCycle(AluOp.Dec, Some(Reg8.E), Some(Reg8.E)))),
+    // dec H
+    (0x25, Seq(fetchCycle(AluOp.Dec, Some(Reg8.H), Some(Reg8.H)))),
+    // dec L
+    (0x2D, Seq(fetchCycle(AluOp.Dec, Some(Reg8.L), Some(Reg8.L)))),
+    // TODO dec (HL)
+    // dec A
+    (0x3D, Seq(fetchCycle(AluOp.Dec, Some(Reg8.A), Some(Reg8.A)))),
+    // ld B, d8
+    (0x06, Seq(fetchCycle(AluOp.Nop, None, None),
+               MCycle(AluOp.Nop, None, Some(Reg8.B), true))),
+    // ld C, d8
+    (0x0E, Seq(fetchCycle(AluOp.Nop, None, None),
+               MCycle(AluOp.Nop, None, Some(Reg8.C), true))),
+    // ld D, d8
+    (0x16, Seq(fetchCycle(AluOp.Nop, None, None),
+               MCycle(AluOp.Nop, None, Some(Reg8.D), true))),
+    // ld E, d8
+    (0x1E, Seq(fetchCycle(AluOp.Nop, None, None),
+               MCycle(AluOp.Nop, None, Some(Reg8.E), true))),
+    // ld H, d8
+    (0x26, Seq(fetchCycle(AluOp.Nop, None, None),
+               MCycle(AluOp.Nop, None, Some(Reg8.H), true))),
+    // ld L, d8
+    (0x2E, Seq(fetchCycle(AluOp.Nop, None, None),
+               MCycle(AluOp.Nop, None, Some(Reg8.L), true))),
+    // ld A, d8
+    (0x3E, Seq(fetchCycle(AluOp.Nop, None, None),
+               MCycle(AluOp.Nop, None, Some(Reg8.A), true)))
+    
   ) ++
   arithmetic8Bit(0x80, AluOp.Add) ++ arithmetic8Bit(0x88, AluOp.Adc) ++
   arithmetic8Bit(0x90, AluOp.Sub) ++ arithmetic8Bit(0x98, AluOp.Sbc) ++
@@ -228,6 +259,7 @@ class CpuDecoder extends Component {
     val loadOpB = out Bool
     val storeSelect = out(Reg8.DataType)
     val store = out Bool
+    val memRead = out Bool
   }
 
   def decodeCycle(cycle: MCycle) = {
@@ -252,10 +284,16 @@ class CpuDecoder extends Component {
         io.store := False
       }
     }
+    if (cycle.memRead) {
+      io.memRead := True
+    } else {
+      io.memRead := False
+    }
   }
 
   // default to NOP
   decodeCycle(DefaultCycle)
+  io.nextMCycle := 0
 
   // decode microcode instructions
   for(icode <- Microcode) {

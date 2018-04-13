@@ -29,7 +29,7 @@ object TopLevelSim {
         }
       }
 
-      sleep(200)
+      sleep(500)
       simSuccess()
     }
   }
