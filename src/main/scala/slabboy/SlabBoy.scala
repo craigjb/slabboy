@@ -11,7 +11,7 @@ class SlabBoy extends Component {
     val en = out Bool
   }
 
-  val cpu = new CPU(
+  val cpu = new Cpu(
     bootVector = 0x0000,
     spInit = 0xFFFE
   )
@@ -21,28 +21,43 @@ class SlabBoy extends Component {
   io.en := cpu.io.mreq
 }
 
-object CPU {
+object Cpu {
   object Reg16 {
-    val WZ = 0
-    val BC = 1
-    val DE = 2
-    val HL = 3
-    val SP = 4
-    val PC = 5
+    val WZ = 1
+    val BC = 2
+    val DE = 3
+    val HL = 4
+    val SP = 5
+    val PC = 6
   }
 
   object Reg8 {
-    val W = 0; val Z = 1
-    val B = 2; val C = 3
-    val D = 4; val E = 5
-    val H = 6; val L = 7
-    val SPH = 8; val SPL = 9
-    val PCL = 10; val PCH = 11
+    val A = 0; val F = 1
+    val W = 2; val Z = 3
+    val B = 4; val C = 5
+    val D = 6; val E = 7
+    val H = 8; val L = 9
+    val SPH = 10; val SPL = 11
+    val PCL = 12; val PCH = 13
+
+    // auto calculate bits needed to represent register index
+    def DataType = UInt(log2Up(PCH) bits)
+  }
+
+  object Flags {
+    val C = 4
+    val H = 5
+    val N = 6
+    val Z = 7
+  }
+
+  object AluOp extends SpinalEnum {
+    val Nop, Add, Adc, Sub, Sbc, And, Xor, Or, Cp, Inc, Dec = newElement()
   }
 }
 
-class CPU(bootVector: Int, spInit: Int) extends Component {
-  import CPU._
+class Cpu(bootVector: Int, spInit: Int) extends Component {
+  import Cpu._
 
   val io = new Bundle {
     val address = out UInt(16 bits)
@@ -59,9 +74,9 @@ class CPU(bootVector: Int, spInit: Int) extends Component {
   val ir = RegInit(U(0x00, 8 bits))
 
   // register file
-  val registers16 = Vec(Reg(UInt(16 bits)), 6)
-  // WZ, BC, DE, and HL are all initialized to zero
-  for (i <- (0 until 4)) {
+  val registers16 = Vec(Reg(UInt(16 bits)), 7)
+  // A, F, WZ, BC, DE, and HL are all initialized to zero
+  for (i <- (0 until 5)) {
     registers16(i).init(0)
   }
   // SP and PC have defined init values
@@ -73,31 +88,276 @@ class CPU(bootVector: Int, spInit: Int) extends Component {
     reg16 => Seq(reg16(15 downto 8), reg16(7 downto 0))
   )
 
+  val temp = Reg(UInt(8 bits)) init(0)
+
+  val mCycle = Reg(CpuDecoder.MCycleDataType) init(0)
+
+  val decoder = new CpuDecoder
+  decoder.io.mCycle := mCycle
+  decoder.io.ir := ir
+
+  val alu = new CpuAlu
+  alu.io.op := decoder.io.aluOp
+  alu.io.flagsIn := registers8(Reg8.F)
+  alu.io.operandA := registers8(Reg8.A)
+  alu.io.operandB := temp
+
   val tCycleFsm = new StateMachine {
-    val t0State: State = new State with EntryPoint {
-      whenIsActive {
+    val t1State: State = new State with EntryPoint {
+      onEntry {
         address := registers16(Reg16.PC)
         mreq := True
-        goto(t1State)
       }
-    }
-    val t1State = new State {
       whenIsActive {
         mreq := False
-        registers16(Reg16.PC) := registers16(Reg16.PC) + 1
         goto(t2State)
       }
     }
     val t2State = new State {
       whenIsActive {
         ir := io.dataIn
+        registers16(Reg16.PC) := registers16(Reg16.PC) + 1
         goto(t3State)
       }
     }
     val t3State = new State {
       whenIsActive {
-        goto(t0State)
+        when(decoder.io.loadOpB) {
+          temp := registers8(decoder.io.opBSelect)
+        }
+        goto(t4State)
       }
+    }
+    val t4State = new State {
+      whenIsActive {
+        when(decoder.io.store) {
+          registers8(decoder.io.storeSelect) := alu.io.result
+        }
+        registers8(Reg8.F) := alu.io.flagsOut
+        mCycle := decoder.io.nextMCycle
+        goto(t1State)
+      }
+    }
+  }
+}
+
+object CpuDecoder {
+  import Cpu._
+
+  case class MCycle(
+    aluOp: SpinalEnumElement[AluOp.type],
+    opBSelect: Option[Int],
+    storeSelect: Option[Int]
+  )
+
+  // helper function for the regular op code pattern
+  // used for the bulk of the arithmetic instructions
+  def arithmetic8Bit(base: Int,
+                     aluOp: SpinalEnumElement[AluOp.type]
+                    ) : Seq[(Int, Seq[MCycle])] = {
+    val store = if (aluOp == AluOp.Cp) { None } else { Some(Reg8.A) }
+    Seq(
+      (base + 0, Seq(MCycle(aluOp, Some(Reg8.B), store))),
+      (base + 1, Seq(MCycle(aluOp, Some(Reg8.C), store))),
+      (base + 2, Seq(MCycle(aluOp, Some(Reg8.D), store))),
+      (base + 3, Seq(MCycle(aluOp, Some(Reg8.E), store))),
+      (base + 4, Seq(MCycle(aluOp, Some(Reg8.H), store))),
+      (base + 5, Seq(MCycle(aluOp, Some(Reg8.L), store))),
+      // TODO indirect (hl)
+      (base + 7, Seq(MCycle(aluOp, Some(Reg8.A), store)))
+    )
+  }
+
+  val Microcode = Seq(
+    // nop
+    (0x00, Seq(MCycle(AluOp.Nop, None, None))),
+
+    // inc b
+    (0x04, Seq(MCycle(AluOp.Inc, Some(Reg8.B), Some(Reg8.B)))),
+    // inc c
+    (0x0C, Seq(MCycle(AluOp.Inc, Some(Reg8.C), Some(Reg8.C)))),
+    // inc d
+    (0x14, Seq(MCycle(AluOp.Inc, Some(Reg8.D), Some(Reg8.D)))),
+    // inc e
+    (0x1C, Seq(MCycle(AluOp.Inc, Some(Reg8.E), Some(Reg8.E)))),
+    // inc h
+    (0x24, Seq(MCycle(AluOp.Inc, Some(Reg8.H), Some(Reg8.H)))),
+    // inc l
+    (0x2C, Seq(MCycle(AluOp.Inc, Some(Reg8.L), Some(Reg8.L)))),
+    // TODO inc (hl)
+    // inc a
+    (0x3C, Seq(MCycle(AluOp.Inc, Some(Reg8.A), Some(Reg8.A)))),
+
+    // dec b
+    (0x05, Seq(MCycle(AluOp.Dec, Some(Reg8.B), Some(Reg8.B)))),
+    // dec c
+    (0x0D, Seq(MCycle(AluOp.Dec, Some(Reg8.C), Some(Reg8.C)))),
+    // dec d
+    (0x15, Seq(MCycle(AluOp.Dec, Some(Reg8.D), Some(Reg8.D)))),
+    // dec e
+    (0x1D, Seq(MCycle(AluOp.Dec, Some(Reg8.E), Some(Reg8.E)))),
+    // dec h
+    (0x25, Seq(MCycle(AluOp.Dec, Some(Reg8.H), Some(Reg8.H)))),
+    // dec l
+    (0x2D, Seq(MCycle(AluOp.Dec, Some(Reg8.L), Some(Reg8.L)))),
+    // TODO dec (hl)
+    // dec a
+    (0x3D, Seq(MCycle(AluOp.Dec, Some(Reg8.A), Some(Reg8.A))))
+  ) ++
+  arithmetic8Bit(0x80, AluOp.Add) ++ arithmetic8Bit(0x88, AluOp.Adc) ++
+  arithmetic8Bit(0x90, AluOp.Sub) ++ arithmetic8Bit(0x98, AluOp.Sbc) ++
+  arithmetic8Bit(0xA0, AluOp.And) ++ arithmetic8Bit(0xA8, AluOp.Xor) ++
+  arithmetic8Bit(0xB0, AluOp.Or) ++ arithmetic8Bit(0xB8, AluOp.Cp)
+
+  val DefaultCycle = Microcode(0)._2(0)
+
+  val MaxMCycles = Microcode.map(code => code._2.length).reduceLeft(_ max _ )
+  def MCycleDataType = UInt(log2Up(MaxMCycles) bits)
+}
+
+class CpuDecoder extends Component {
+  import Cpu._
+  import CpuDecoder._
+
+  val io = new Bundle {
+    val mCycle = in(MCycleDataType)
+    val nextMCycle = out(MCycleDataType)
+    val ir = in UInt(8 bits)
+    val aluOp = out(AluOp())
+    val opBSelect = out(Reg8.DataType)
+    val loadOpB = out Bool
+    val storeSelect = out(Reg8.DataType)
+    val store = out Bool
+  }
+
+  def decodeCycle(cycle: MCycle) = {
+    io.aluOp := cycle.aluOp
+    cycle.opBSelect match {
+      case Some(x) => {
+        io.opBSelect := x
+        io.loadOpB := True
+      }
+      case None => {
+        io.opBSelect := 0
+        io.loadOpB := False
+      }
+    }
+    cycle.storeSelect match {
+      case Some(x) => {
+        io.storeSelect := x
+        io.store := True
+      }
+      case None => {
+        io.storeSelect := 0
+        io.store := False
+      }
+    }
+  }
+
+  // default to NOP
+  decodeCycle(DefaultCycle)
+
+  // decode microcode instructions
+  for(icode <- Microcode) {
+    when(io.ir === icode._1) {
+      for((cycle, i) <- icode._2.zipWithIndex) {
+        when(io.mCycle === i) {
+          decodeCycle(cycle)
+          if(i == icode._2.length - 1) {
+            io.nextMCycle := 0
+          } else {
+            io.nextMCycle := io.mCycle + 1
+          }
+        }
+      }
+    }
+  }
+}
+
+class CpuAlu extends Component {
+  import Cpu._
+
+  val io = new Bundle {
+    val op = in(AluOp())
+    val flagsIn = in UInt(8 bits)
+    val flagsOut = out UInt(8 bits)
+    val operandA = in UInt(8 bits)
+    val operandB = in UInt(8 bits)
+    val result = out UInt(8 bits)
+  }
+
+  // use 9-bits internally so the carry bit is easily available
+  val wideResult = UInt(9 bits)
+  io.result := wideResult(7 downto 0)
+  val wideOpA = io.operandA.resize(9 bits)
+  val wideOpB = io.operandB.resize(9 bits)
+
+  // grab carry bits
+  val carry = wideResult(8)
+  // Z80 has half-carry and half-borrow bits as well
+  val halfCarry = (
+    wideResult.asBits(4) &&
+    wideResult.asBits(3 downto 0) === B(0, 4 bits)
+  )
+  val halfBorrow = (
+    !wideResult.asBits(4) &&
+    wideResult.asBits(3 downto 0) === B(0xF, 4 bits)
+  )
+
+  // by default, pass flags through
+  io.flagsOut := io.flagsIn
+
+  // helper for optionally setting or resetting flags
+  def setFlags(c: Bool, h: Bool, n: Bool) = {
+    io.flagsOut(Cpu.Flags.C) := c
+    io.flagsOut(Cpu.Flags.H) := h
+    io.flagsOut(Cpu.Flags.N) := n
+    io.flagsOut(Cpu.Flags.Z) := (wideResult(7 downto 0) === 0)
+  }
+
+  switch(io.op) {
+    is(AluOp.Nop) {
+      wideResult := wideOpB
+    }
+    is(AluOp.Add) {
+      wideResult := wideOpA + wideOpB
+      setFlags(carry, halfCarry, False)
+    }
+    is(AluOp.Adc) {
+      wideResult := wideOpA + wideOpB + io.flagsIn(Cpu.Flags.C).asUInt
+      setFlags(carry, halfCarry, False)
+    }
+    is(AluOp.Sub) {
+      wideResult := wideOpA - wideOpB
+      setFlags(carry, halfBorrow, True)
+    }
+    is(AluOp.Sbc) {
+      wideResult := wideOpA - wideOpB - io.flagsIn(Cpu.Flags.C).asUInt
+      setFlags(carry, halfBorrow, True)
+    }
+    is(AluOp.And) {
+      wideResult := wideOpA & wideOpB
+      setFlags(False, True, False)
+    }
+    is(AluOp.Xor) {
+      wideResult := wideOpA ^ wideOpB
+      setFlags(False, False, False)
+    }
+    is(AluOp.Or) {
+      wideResult := wideOpA | wideOpB
+      setFlags(False, False, False)
+    }
+    is(AluOp.Cp) {
+      wideResult := wideOpA - wideOpB
+      setFlags(!carry, !halfCarry, True)
+    }
+    is(AluOp.Inc) {
+      wideResult := wideOpB + 1
+      setFlags(io.flagsIn(Cpu.Flags.C), halfCarry, False)
+    }
+    is(AluOp.Dec) {
+      wideResult := wideOpB - 1
+      setFlags(io.flagsIn(Cpu.Flags.C), halfBorrow, True)
     }
   }
 }

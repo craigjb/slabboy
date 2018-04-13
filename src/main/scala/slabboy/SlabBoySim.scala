@@ -18,16 +18,19 @@ object TopLevelSim {
       
       // create a concurrent thread to handle the memory accesses
       // separate from the main test bench execution
-      val memThread = fork {
+      fork {
         val memory = loadProgram("sw/test.gb")
         while (true) {
           dut.clockDomain.waitRisingEdgeWhere(dut.io.en.toBoolean == true)
           val address = dut.io.address.toInt
-          dut.io.dataIn #= memory(address)
+          dut.io.dataIn #= memory(address).toInt & 0xFF
+          dut.clockDomain.waitRisingEdgeWhere(dut.io.en.toBoolean == false)
+          dut.io.dataIn.randomize
         }
       }
 
-      sleep(100)
+      sleep(200)
+      simSuccess()
     }
   }
 }
