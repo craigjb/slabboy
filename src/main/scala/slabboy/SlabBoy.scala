@@ -9,6 +9,7 @@ class SlabBoy extends Component {
     val address = out UInt(16 bits)
     val dataIn = in UInt(8 bits)
     val en = out Bool
+    val halt = out Bool
   }
 
   val cpu = new Cpu(
@@ -19,6 +20,7 @@ class SlabBoy extends Component {
   io.address := cpu.io.address
   cpu.io.dataIn := io.dataIn
   io.en := cpu.io.mreq
+  io.halt := cpu.io.halt
 }
 
 object Cpu {
@@ -63,6 +65,7 @@ class Cpu(bootVector: Int, spInit: Int) extends Component {
     val address = out UInt(16 bits)
     val dataIn = in UInt(8 bits)
     val mreq = out Bool
+    val halt = out Bool
   }
 
   val address = Reg(UInt(16 bits)) init(0)
@@ -91,6 +94,8 @@ class Cpu(bootVector: Int, spInit: Int) extends Component {
   val temp = Reg(UInt(8 bits)) init(0)
 
   val mCycle = Reg(CpuDecoder.MCycleDataType) init(0)
+  val halt = Reg(Bool) init(False)
+  io.halt := halt
 
   val decoder = new CpuDecoder
   decoder.io.mCycle := mCycle
@@ -129,6 +134,7 @@ class Cpu(bootVector: Int, spInit: Int) extends Component {
         when(decoder.io.loadOpB) {
           temp := registers8(decoder.io.opBSelect)
         }
+        halt := decoder.io.nextHalt
         goto(t4State)
       }
     }
@@ -139,7 +145,9 @@ class Cpu(bootVector: Int, spInit: Int) extends Component {
         }
         registers8(Reg8.F) := alu.io.flagsOut
         mCycle := decoder.io.nextMCycle
-        goto(t1State)
+        when (!halt) {
+          goto(t1State)
+        }
       }
     }
   }
@@ -152,13 +160,19 @@ object CpuDecoder {
     aluOp: SpinalEnumElement[AluOp.type],
     opBSelect: Option[Int],
     storeSelect: Option[Int],
-    memRead: Boolean
+    memRead: Boolean,
+    halt: Boolean
   )
 
   def fetchCycle(aluOp: SpinalEnumElement[AluOp.type],
                  opBSelect: Option[Int],
                  storeSelect: Option[Int]) = {
-    MCycle(aluOp, opBSelect, storeSelect, false)
+    MCycle(aluOp, opBSelect, storeSelect, false, false)
+  }
+
+  def memReadCycle(aluOp: SpinalEnumElement[AluOp.type],
+                   storeSelect: Option[Int]) = {
+    MCycle(aluOp, None, storeSelect, true, false)
   }
 
   // helper function for the regular op code pattern
@@ -182,6 +196,14 @@ object CpuDecoder {
   val Microcode = Seq(
     // nop
     (0x00, Seq(fetchCycle(AluOp.Nop, None, None))),
+    // halt
+    (0x00, Seq(MCycle(AluOp.Nop, None, None, false, true)))
+  ) ++
+  arithmetic8Bit(0x80, AluOp.Add) ++ arithmetic8Bit(0x88, AluOp.Adc) ++
+  arithmetic8Bit(0x90, AluOp.Sub) ++ arithmetic8Bit(0x98, AluOp.Sbc) ++
+  arithmetic8Bit(0xA0, AluOp.And) ++ arithmetic8Bit(0xA8, AluOp.Xor) ++
+  arithmetic8Bit(0xB0, AluOp.Or) ++ arithmetic8Bit(0xB8, AluOp.Cp) ++
+  Seq(
     // inc B
     (0x04, Seq(fetchCycle(AluOp.Inc, Some(Reg8.B), Some(Reg8.B)))),
     // inc B
@@ -214,31 +236,26 @@ object CpuDecoder {
     (0x3D, Seq(fetchCycle(AluOp.Dec, Some(Reg8.A), Some(Reg8.A)))),
     // ld B, d8
     (0x06, Seq(fetchCycle(AluOp.Nop, None, None),
-               MCycle(AluOp.Nop, None, Some(Reg8.B), true))),
+               memReadCycle(AluOp.Nop, Some(Reg8.B)))),
     // ld C, d8
     (0x0E, Seq(fetchCycle(AluOp.Nop, None, None),
-               MCycle(AluOp.Nop, None, Some(Reg8.C), true))),
+               memReadCycle(AluOp.Nop, Some(Reg8.C)))),
     // ld D, d8
     (0x16, Seq(fetchCycle(AluOp.Nop, None, None),
-               MCycle(AluOp.Nop, None, Some(Reg8.D), true))),
+               memReadCycle(AluOp.Nop, Some(Reg8.D)))),
     // ld E, d8
     (0x1E, Seq(fetchCycle(AluOp.Nop, None, None),
-               MCycle(AluOp.Nop, None, Some(Reg8.E), true))),
+               memReadCycle(AluOp.Nop, Some(Reg8.E)))),
     // ld H, d8
     (0x26, Seq(fetchCycle(AluOp.Nop, None, None),
-               MCycle(AluOp.Nop, None, Some(Reg8.H), true))),
+               memReadCycle(AluOp.Nop, Some(Reg8.H)))),
     // ld L, d8
     (0x2E, Seq(fetchCycle(AluOp.Nop, None, None),
-               MCycle(AluOp.Nop, None, Some(Reg8.L), true))),
+               memReadCycle(AluOp.Nop, Some(Reg8.L)))),
     // ld A, d8
     (0x3E, Seq(fetchCycle(AluOp.Nop, None, None),
-               MCycle(AluOp.Nop, None, Some(Reg8.A), true)))
-    
-  ) ++
-  arithmetic8Bit(0x80, AluOp.Add) ++ arithmetic8Bit(0x88, AluOp.Adc) ++
-  arithmetic8Bit(0x90, AluOp.Sub) ++ arithmetic8Bit(0x98, AluOp.Sbc) ++
-  arithmetic8Bit(0xA0, AluOp.And) ++ arithmetic8Bit(0xA8, AluOp.Xor) ++
-  arithmetic8Bit(0xB0, AluOp.Or) ++ arithmetic8Bit(0xB8, AluOp.Cp)
+               memReadCycle(AluOp.Nop, Some(Reg8.A))))
+  )
 
   val DefaultCycle = Microcode(0)._2(0)
 
@@ -260,6 +277,7 @@ class CpuDecoder extends Component {
     val storeSelect = out(Reg8.DataType)
     val store = out Bool
     val memRead = out Bool
+    val nextHalt = out Bool
   }
 
   def decodeCycle(cycle: MCycle) = {
@@ -288,6 +306,11 @@ class CpuDecoder extends Component {
       io.memRead := True
     } else {
       io.memRead := False
+    }
+    if (cycle.halt) {
+      io.nextHalt := True
+    } else {
+      io.nextHalt := False
     }
   }
 

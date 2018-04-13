@@ -29,7 +29,8 @@ object TopLevelSim {
         }
       }
 
-      sleep(500)
+      dut.clockDomain.waitRisingEdgeWhere(dut.io.halt.toBoolean == true)
+      sleep(2)
       simSuccess()
     }
   }

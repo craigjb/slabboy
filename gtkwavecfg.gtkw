@@ -1,25 +1,24 @@
 [*]
 [*] GTKWave Analyzer v3.3.79 (w)1999-2017 BSI
-[*] Fri Apr 13 09:06:52 2018
+[*] Fri Apr 13 19:13:54 2018
 [*]
 [dumpfile] "/home/craigjb/Dropbox/craigjb/Projects/slabboy/simWorkspace/SlabBoy/test.vcd"
-[dumpfile_mtime] "Fri Apr 13 09:04:13 2018"
-[dumpfile_size] 9349
+[dumpfile_mtime] "Fri Apr 13 19:09:38 2018"
+[dumpfile_size] 15048
 [savefile] "/home/craigjb/Dropbox/craigjb/Projects/slabboy/gtkwavecfg.gtkw"
-[timestart] 0
-[size] 2556 884
-[pos] -1 -1
-*-3.466017 41 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[timestart] 225
+[size] 2556 1056
+[pos] -1 -61
+*-3.195560 316 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] TOP.
 [treeopen] TOP.SlabBoy.
 [treeopen] TOP.SlabBoy.cpu_1.
 [sst_width] 232
 [signals_width] 217
 [sst_expanded] 1
-[sst_vpaned_height] 291
-@29
-TOP.SlabBoy.clk
+[sst_vpaned_height] 525
 @28
+TOP.SlabBoy.clk
 TOP.SlabBoy.reset
 @200
 -
@@ -62,12 +61,17 @@ TOP.SlabBoy.reset
 -Registers
 @200
 -
+@800200
 -CPU Control
 @22
 +{ir} TOP.SlabBoy.cpu_1.ir[7:0]
+@28
++{mCycle} TOP.SlabBoy.cpu_1.mCycle[0]
 @24
 +{tCycle} TOP.SlabBoy.cpu_1.tCycleFsm_stateReg[2:0]
 @28
-TOP.SlabBoy.cpu_1.alu.halfCarry
+TOP.SlabBoy.cpu_1.halt
+@1000200
+-CPU Control
 [pattern_trace] 1
 [pattern_trace] 0

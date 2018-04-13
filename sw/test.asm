@@ -36,3 +36,5 @@ ld d, $DD
 ld e, $EE
 ld h, $55
 ld l, $77
+
+halt
