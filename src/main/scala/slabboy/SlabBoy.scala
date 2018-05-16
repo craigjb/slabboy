@@ -193,6 +193,21 @@ object CpuDecoder {
     )
   }
 
+  // helper function for the regular op code pattern
+  // used for most of the 8-bit reg-to-reg LD instructions
+  def load8BitRegToReg(base: Int, dest: Int) = {
+    Seq(
+      (base + 0, Seq(fetchCycle(AluOp.Nop, Some(Reg8.B), Some(dest)))),
+      (base + 1, Seq(fetchCycle(AluOp.Nop, Some(Reg8.C), Some(dest)))),
+      (base + 2, Seq(fetchCycle(AluOp.Nop, Some(Reg8.D), Some(dest)))),
+      (base + 3, Seq(fetchCycle(AluOp.Nop, Some(Reg8.E), Some(dest)))),
+      (base + 4, Seq(fetchCycle(AluOp.Nop, Some(Reg8.H), Some(dest)))),
+      (base + 5, Seq(fetchCycle(AluOp.Nop, Some(Reg8.L), Some(dest)))),
+      // TODO indirect (hl)
+      (base + 7, Seq(fetchCycle(AluOp.Nop, Some(Reg8.A), Some(dest))))
+    )
+  }
+
   val Microcode = Seq(
     // nop
     (0x00, Seq(fetchCycle(AluOp.Nop, None, None))),
@@ -203,6 +218,13 @@ object CpuDecoder {
   arithmetic8Bit(0x90, AluOp.Sub) ++ arithmetic8Bit(0x98, AluOp.Sbc) ++
   arithmetic8Bit(0xA0, AluOp.And) ++ arithmetic8Bit(0xA8, AluOp.Xor) ++
   arithmetic8Bit(0xB0, AluOp.Or) ++ arithmetic8Bit(0xB8, AluOp.Cp) ++
+  load8BitRegToReg(0x40, Reg8.B) ++
+  load8BitRegToReg(0x48, Reg8.C) ++
+  load8BitRegToReg(0x50, Reg8.D) ++
+  load8BitRegToReg(0x58, Reg8.E) ++
+  load8BitRegToReg(0x60, Reg8.H) ++
+  load8BitRegToReg(0x68, Reg8.L) ++
+  load8BitRegToReg(0x78, Reg8.A) ++
   Seq(
     // inc B
     (0x04, Seq(fetchCycle(AluOp.Inc, Some(Reg8.B), Some(Reg8.B)))),

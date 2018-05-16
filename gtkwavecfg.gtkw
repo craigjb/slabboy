@@ -1,15 +1,15 @@
 [*]
-[*] GTKWave Analyzer v3.3.79 (w)1999-2017 BSI
-[*] Fri Apr 13 19:13:54 2018
+[*] GTKWave Analyzer v3.3.89 (w)1999-2018 BSI
+[*] Wed May 16 21:42:31 2018
 [*]
-[dumpfile] "/home/craigjb/Dropbox/craigjb/Projects/slabboy/simWorkspace/SlabBoy/test.vcd"
-[dumpfile_mtime] "Fri Apr 13 19:09:38 2018"
-[dumpfile_size] 15048
-[savefile] "/home/craigjb/Dropbox/craigjb/Projects/slabboy/gtkwavecfg.gtkw"
-[timestart] 225
-[size] 2556 1056
-[pos] -1 -61
-*-3.195560 316 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[dumpfile] "/Users/craigjb/Dropbox/craigjb/Projects/slabboy/simWorkspace/SlabBoy/test.vcd"
+[dumpfile_mtime] "Wed May 16 21:40:15 2018"
+[dumpfile_size] 16433
+[savefile] "/Users/craigjb/Dropbox/craigjb/Projects/slabboy/gtkwavecfg.gtkw"
+[timestart] 321
+[size] 1920 1178
+[pos] -1 -1
+*-2.311047 348 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] TOP.
 [treeopen] TOP.SlabBoy.
 [treeopen] TOP.SlabBoy.cpu_1.
@@ -46,7 +46,20 @@ TOP.SlabBoy.reset
 +{C} TOP.SlabBoy.cpu_1.registers8_5[7:0]
 +{D} TOP.SlabBoy.cpu_1.registers8_6[7:0]
 +{E} TOP.SlabBoy.cpu_1.registers8_7[7:0]
+@c00022
 +{H} TOP.SlabBoy.cpu_1.registers8_8[7:0]
+@28
+(0)TOP.SlabBoy.cpu_1.registers8_8[7:0]
+(1)TOP.SlabBoy.cpu_1.registers8_8[7:0]
+(2)TOP.SlabBoy.cpu_1.registers8_8[7:0]
+(3)TOP.SlabBoy.cpu_1.registers8_8[7:0]
+(4)TOP.SlabBoy.cpu_1.registers8_8[7:0]
+(5)TOP.SlabBoy.cpu_1.registers8_8[7:0]
+(6)TOP.SlabBoy.cpu_1.registers8_8[7:0]
+(7)TOP.SlabBoy.cpu_1.registers8_8[7:0]
+@1401200
+-group_end
+@22
 +{L} TOP.SlabBoy.cpu_1.registers8_9[7:0]
 @200
 -
@@ -65,7 +78,7 @@ TOP.SlabBoy.reset
 -CPU Control
 @22
 +{ir} TOP.SlabBoy.cpu_1.ir[7:0]
-@28
+@25
 +{mCycle} TOP.SlabBoy.cpu_1.mCycle[0]
 @24
 +{tCycle} TOP.SlabBoy.cpu_1.tCycleFsm_stateReg[2:0]

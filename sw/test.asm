@@ -37,4 +37,9 @@ ld e, $EE
 ld h, $55
 ld l, $77
 
+ld a, b
+ld b, l
+ld h, d
+ld d, c
+
 halt
