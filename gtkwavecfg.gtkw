@@ -1,22 +1,22 @@
 [*]
 [*] GTKWave Analyzer v3.3.89 (w)1999-2018 BSI
-[*] Wed May 16 21:42:31 2018
+[*] Wed May 16 22:38:36 2018
 [*]
 [dumpfile] "/Users/craigjb/Dropbox/craigjb/Projects/slabboy/simWorkspace/SlabBoy/test.vcd"
-[dumpfile_mtime] "Wed May 16 21:40:15 2018"
-[dumpfile_size] 16433
+[dumpfile_mtime] "Wed May 16 22:34:29 2018"
+[dumpfile_size] 18085
 [savefile] "/Users/craigjb/Dropbox/craigjb/Projects/slabboy/gtkwavecfg.gtkw"
-[timestart] 321
-[size] 1920 1178
+[timestart] 304
+[size] 1399 812
 [pos] -1 -1
-*-2.311047 348 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-4.311047 374 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] TOP.
 [treeopen] TOP.SlabBoy.
 [treeopen] TOP.SlabBoy.cpu_1.
 [sst_width] 232
 [signals_width] 217
 [sst_expanded] 1
-[sst_vpaned_height] 525
+[sst_vpaned_height] 345
 @28
 TOP.SlabBoy.clk
 TOP.SlabBoy.reset
@@ -70,6 +70,10 @@ TOP.SlabBoy.reset
 +{HL} TOP.SlabBoy.cpu_1.registers16_4[15:0]
 +{SP} TOP.SlabBoy.cpu_1.registers16_5[15:0]
 +{PC} TOP.SlabBoy.cpu_1.registers16_6[15:0]
+@200
+-
+@23
++{temp} TOP.SlabBoy.cpu_1.temp[7:0]
 @1000200
 -Registers
 @200
@@ -78,11 +82,11 @@ TOP.SlabBoy.reset
 -CPU Control
 @22
 +{ir} TOP.SlabBoy.cpu_1.ir[7:0]
-@25
-+{mCycle} TOP.SlabBoy.cpu_1.mCycle[0]
 @24
++{mCycle} TOP.SlabBoy.cpu_1.mCycle[0]
 +{tCycle} TOP.SlabBoy.cpu_1.tCycleFsm_stateReg[2:0]
 @28
++{addrSrc} TOP.SlabBoy.cpu_1.addrSrc_1[0]
 TOP.SlabBoy.cpu_1.halt
 @1000200
 -CPU Control

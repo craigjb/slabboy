@@ -56,6 +56,10 @@ object Cpu {
   object AluOp extends SpinalEnum {
     val Nop, Add, Adc, Sub, Sbc, And, Xor, Or, Cp, Inc, Dec = newElement()
   }
+
+  object AddrSrc extends SpinalEnum {
+    val PC, HL = newElement()
+  }
 }
 
 class Cpu(bootVector: Int, spInit: Int) extends Component {
@@ -96,6 +100,7 @@ class Cpu(bootVector: Int, spInit: Int) extends Component {
   val mCycle = Reg(CpuDecoder.MCycleDataType) init(0)
   val halt = Reg(Bool) init(False)
   io.halt := halt
+  val addrSrc = Reg(AddrSrc()) init(AddrSrc.PC)
 
   val decoder = new CpuDecoder
   decoder.io.mCycle := mCycle
@@ -110,7 +115,12 @@ class Cpu(bootVector: Int, spInit: Int) extends Component {
   val tCycleFsm = new StateMachine {
     val t1State: State = new State with EntryPoint {
       onEntry {
-        address := registers16(Reg16.PC)
+        addrSrc := decoder.io.nextAddrSrc
+        switch(decoder.io.nextAddrSrc) {
+          is(AddrSrc.PC) { address := registers16(Reg16.PC) }
+          is(AddrSrc.HL) { address := registers16(Reg16.HL) }
+        }
+        
         mreq := True
       }
       whenIsActive {
@@ -125,7 +135,9 @@ class Cpu(bootVector: Int, spInit: Int) extends Component {
         }.otherwise {
           ir := io.dataIn
         }
-        registers16(Reg16.PC) := registers16(Reg16.PC) + 1
+        when(addrSrc === AddrSrc.PC) {
+          registers16(Reg16.PC) := registers16(Reg16.PC) + 1
+        }
         goto(t3State)
       }
     }
@@ -161,18 +173,21 @@ object CpuDecoder {
     opBSelect: Option[Int],
     storeSelect: Option[Int],
     memRead: Boolean,
+    nextAddrSrc: SpinalEnumElement[AddrSrc.type],
     halt: Boolean
   )
 
   def fetchCycle(aluOp: SpinalEnumElement[AluOp.type],
                  opBSelect: Option[Int],
-                 storeSelect: Option[Int]) = {
-    MCycle(aluOp, opBSelect, storeSelect, false, false)
+                 storeSelect: Option[Int],
+                 nextAddrSrc: SpinalEnumElement[AddrSrc.type] = AddrSrc.PC) = {
+    MCycle(aluOp, opBSelect, storeSelect, false, nextAddrSrc, false)
   }
 
   def memReadCycle(aluOp: SpinalEnumElement[AluOp.type],
-                   storeSelect: Option[Int]) = {
-    MCycle(aluOp, None, storeSelect, true, false)
+                   storeSelect: Option[Int],
+                   nextAddrSrc: SpinalEnumElement[AddrSrc.type] = AddrSrc.PC) = {
+    MCycle(aluOp, None, storeSelect, true, nextAddrSrc, false)
   }
 
   // helper function for the regular op code pattern
@@ -188,7 +203,8 @@ object CpuDecoder {
       (base + 3, Seq(fetchCycle(aluOp, Some(Reg8.E), store))),
       (base + 4, Seq(fetchCycle(aluOp, Some(Reg8.H), store))),
       (base + 5, Seq(fetchCycle(aluOp, Some(Reg8.L), store))),
-      // TODO indirect (hl)
+      (base + 6, Seq(fetchCycle(AluOp.Nop, None, None, nextAddrSrc=AddrSrc.HL),
+               memReadCycle(aluOp, store))),
       (base + 7, Seq(fetchCycle(aluOp, Some(Reg8.A), store)))
     )
   }
@@ -203,7 +219,8 @@ object CpuDecoder {
       (base + 3, Seq(fetchCycle(AluOp.Nop, Some(Reg8.E), Some(dest)))),
       (base + 4, Seq(fetchCycle(AluOp.Nop, Some(Reg8.H), Some(dest)))),
       (base + 5, Seq(fetchCycle(AluOp.Nop, Some(Reg8.L), Some(dest)))),
-      // TODO indirect (hl)
+      (base + 6, Seq(fetchCycle(AluOp.Nop, None, None, nextAddrSrc=AddrSrc.HL),
+               memReadCycle(AluOp.Nop, Some(dest)))),
       (base + 7, Seq(fetchCycle(AluOp.Nop, Some(Reg8.A), Some(dest))))
     )
   }
@@ -212,7 +229,7 @@ object CpuDecoder {
     // nop
     (0x00, Seq(fetchCycle(AluOp.Nop, None, None))),
     // halt
-    (0x00, Seq(MCycle(AluOp.Nop, None, None, false, true)))
+    (0x76, Seq(MCycle(AluOp.Nop, None, None, false, AddrSrc.PC, true)))
   ) ++
   arithmetic8Bit(0x80, AluOp.Add) ++ arithmetic8Bit(0x88, AluOp.Adc) ++
   arithmetic8Bit(0x90, AluOp.Sub) ++ arithmetic8Bit(0x98, AluOp.Sbc) ++
@@ -299,6 +316,7 @@ class CpuDecoder extends Component {
     val storeSelect = out(Reg8.DataType)
     val store = out Bool
     val memRead = out Bool
+    val nextAddrSrc = out(AddrSrc())
     val nextHalt = out Bool
   }
 
@@ -329,6 +347,7 @@ class CpuDecoder extends Component {
     } else {
       io.memRead := False
     }
+    io.nextAddrSrc := cycle.nextAddrSrc
     if (cycle.halt) {
       io.nextHalt := True
     } else {
@@ -358,7 +377,7 @@ class CpuDecoder extends Component {
 }
 
 class CpuAlu extends Component {
-  import Cpu._
+  import Cpu.AluOp
 
   val io = new Bundle {
     val op = in(AluOp())

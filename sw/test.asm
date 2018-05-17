@@ -42,4 +42,11 @@ ld b, l
 ld h, d
 ld d, c
 
+ld h, $0
+ld l, $4
+ld a, [HL]
+ld h, $0
+ld l, $3
+add a, [HL]
+
 halt
