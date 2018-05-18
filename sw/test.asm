@@ -54,4 +54,19 @@ ld l, $00
 ld b, a
 ld [hl], b
 
+inc l
+ld [hl], $58
+inc l
+ld [hl+], a
+ld [hl+], a
+ld [hl-], a
+
+ld h, $00
+ld l, $00
+ld a, [hl+]
+ld a, [hl+]
+ld a, [hl+]
+
+ldh [$27], a
+
 halt

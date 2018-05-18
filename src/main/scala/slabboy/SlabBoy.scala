@@ -62,7 +62,11 @@ object Cpu {
   }
 
   object AddrSrc extends SpinalEnum {
-    val PC, HL = newElement()
+    val PC, HL, BC, DE, FFZ = newElement()
+  }
+
+  object AddrOp extends SpinalEnum {
+    val Nop, Inc, Dec = newElement()
   }
 }
 
@@ -129,22 +133,31 @@ class Cpu(bootVector: Int, spInit: Int) extends Component {
         switch(decoder.io.nextAddrSrc) {
           is(AddrSrc.PC) { address := registers16(Reg16.PC) }
           is(AddrSrc.HL) { address := registers16(Reg16.HL) }
+          is(AddrSrc.BC) { address := registers16(Reg16.BC) }
+          is(AddrSrc.DE) { address := registers16(Reg16.DE) }
+          is(AddrSrc.FFZ) {
+            address(15 downto 8) := 0xFF
+            address(7 downto 0) := registers8(Reg8.Z)
+          }
         }
         
-        mreq := True
         writeCycle := decoder.io.memWrite
-        when(decoder.io.memWrite) {
-          write := True
+        when(!decoder.io.memWrite) {
+          mreq := True
         }
       }
       whenIsActive {
         mreq := False
-        write := False
         goto(t2State)
       }
     }
     val t2State = new State {
       whenIsActive {
+        when(writeCycle) {
+          mreq := True
+          write := True
+        }
+
         when(decoder.io.memRead) {
           temp := io.dataIn
         }.elsewhen(writeCycle) {
@@ -152,14 +165,31 @@ class Cpu(bootVector: Int, spInit: Int) extends Component {
         }.otherwise {
           ir := io.dataIn
         }
-        when(addrSrc === AddrSrc.PC) {
-          registers16(Reg16.PC) := registers16(Reg16.PC) + 1
+
+        def doAddrOp(reg: UInt) {
+          switch(decoder.io.addrOp) {
+            is(AddrOp.Nop) { reg := reg }
+            is(AddrOp.Inc) { reg := reg + 1 }
+            is(AddrOp.Dec) { reg := reg - 1 }
+          }
         }
+
+        switch(addrSrc) {
+          is(AddrSrc.PC) { doAddrOp(registers16(Reg16.PC)) }
+          is(AddrSrc.HL) { doAddrOp(registers16(Reg16.HL)) }
+          is(AddrSrc.BC) { doAddrOp(registers16(Reg16.BC)) }
+          is(AddrSrc.DE) { doAddrOp(registers16(Reg16.DE)) }
+          is(AddrSrc.FFZ) { }
+        }
+
         goto(t3State)
       }
     }
     val t3State = new State {
       whenIsActive {
+        mreq := False
+        write := False
+
         when(decoder.io.loadOpB) {
           temp := registers8(decoder.io.opBSelect)
         }
@@ -192,27 +222,30 @@ object CpuDecoder {
     memRead: Boolean,
     memWrite: Boolean,
     addrSrc: SpinalEnumElement[AddrSrc.type],
+    addrOp: SpinalEnumElement[AddrOp.type],
     halt: Boolean
   )
 
   def fetchCycle(aluOp: SpinalEnumElement[AluOp.type],
                  opBSelect: Option[Int],
-                 storeSelect: Option[Int],
-                 addrSrc: SpinalEnumElement[AddrSrc.type] = AddrSrc.PC) = {
-    MCycle(aluOp, opBSelect, storeSelect, false, false, addrSrc, false)
+                 storeSelect: Option[Int]) = {
+    MCycle(aluOp, opBSelect, storeSelect, false, false,
+           AddrSrc.PC, AddrOp.Inc, false)
   }
 
   def memReadCycle(aluOp: SpinalEnumElement[AluOp.type],
                    storeSelect: Option[Int],
-                   addrSrc: SpinalEnumElement[AddrSrc.type] = AddrSrc.PC) = {
-    MCycle(aluOp, None, storeSelect, true, false, addrSrc, false)
+                   addrSrc: SpinalEnumElement[AddrSrc.type] = AddrSrc.PC,
+                   addrOp: SpinalEnumElement[AddrOp.type] = AddrOp.Nop) = {
+    MCycle(aluOp, None, storeSelect, true, false, addrSrc, addrOp, false)
   }
 
   def memWriteCycle(aluOp: SpinalEnumElement[AluOp.type],
                     opBSelect: Option[Int],
                     storeSelect: Option[Int],
-                    addrSrc: SpinalEnumElement[AddrSrc.type] = AddrSrc.PC) = {
-    MCycle(aluOp, opBSelect, storeSelect, false, true, addrSrc, false)
+                    addrSrc: SpinalEnumElement[AddrSrc.type] = AddrSrc.PC,
+                    addrOp: SpinalEnumElement[AddrOp.type] = AddrOp.Nop) = {
+    MCycle(aluOp, opBSelect, storeSelect, false, true, addrSrc, addrOp, false)
   }
 
   // helper function for the regular op code pattern
@@ -254,7 +287,8 @@ object CpuDecoder {
     // nop
     (0x00, Seq(fetchCycle(AluOp.Nop, None, None))),
     // halt
-    (0x76, Seq(MCycle(AluOp.Nop, None, None, false, false, AddrSrc.PC, true)))
+    (0x76, Seq(MCycle(AluOp.Nop, None, None, false, false,
+               AddrSrc.PC, AddrOp.Nop, true)))
   ) ++
   arithmetic8Bit(0x80, AluOp.Add) ++ arithmetic8Bit(0x88, AluOp.Adc) ++
   arithmetic8Bit(0x90, AluOp.Sub) ++ arithmetic8Bit(0x98, AluOp.Sbc) ++
@@ -300,25 +334,25 @@ object CpuDecoder {
     (0x3D, Seq(fetchCycle(AluOp.Dec, Some(Reg8.A), Some(Reg8.A)))),
     // ld B, d8
     (0x06, Seq(fetchCycle(AluOp.Nop, None, None),
-               memReadCycle(AluOp.Nop, Some(Reg8.B)))),
+               memReadCycle(AluOp.Nop, Some(Reg8.B), addrOp=AddrOp.Inc))),
     // ld C, d8
     (0x0E, Seq(fetchCycle(AluOp.Nop, None, None),
-               memReadCycle(AluOp.Nop, Some(Reg8.C)))),
+               memReadCycle(AluOp.Nop, Some(Reg8.C), addrOp=AddrOp.Inc))),
     // ld D, d8
     (0x16, Seq(fetchCycle(AluOp.Nop, None, None),
-               memReadCycle(AluOp.Nop, Some(Reg8.D)))),
+               memReadCycle(AluOp.Nop, Some(Reg8.D), addrOp=AddrOp.Inc))),
     // ld E, d8
     (0x1E, Seq(fetchCycle(AluOp.Nop, None, None),
-               memReadCycle(AluOp.Nop, Some(Reg8.E)))),
+               memReadCycle(AluOp.Nop, Some(Reg8.E), addrOp=AddrOp.Inc))),
     // ld H, d8
     (0x26, Seq(fetchCycle(AluOp.Nop, None, None),
-               memReadCycle(AluOp.Nop, Some(Reg8.H)))),
+               memReadCycle(AluOp.Nop, Some(Reg8.H), addrOp=AddrOp.Inc))),
     // ld L, d8
     (0x2E, Seq(fetchCycle(AluOp.Nop, None, None),
-               memReadCycle(AluOp.Nop, Some(Reg8.L)))),
+               memReadCycle(AluOp.Nop, Some(Reg8.L), addrOp=AddrOp.Inc))),
     // ld A, d8
     (0x3E, Seq(fetchCycle(AluOp.Nop, None, None),
-               memReadCycle(AluOp.Nop, Some(Reg8.A)))),
+               memReadCycle(AluOp.Nop, Some(Reg8.A), addrOp=AddrOp.Inc))),
     // ld (hl), b
     (0x70, Seq(fetchCycle(AluOp.Nop, Some(Reg8.B), None),
                memWriteCycle(AluOp.Nop, None, None, addrSrc=AddrSrc.HL))),
@@ -339,7 +373,44 @@ object CpuDecoder {
                memWriteCycle(AluOp.Nop, None, None, addrSrc=AddrSrc.HL))),
     // ld (hl), a
     (0x77, Seq(fetchCycle(AluOp.Nop, Some(Reg8.A), None),
-               memWriteCycle(AluOp.Nop, None, None, addrSrc=AddrSrc.HL)))
+               memWriteCycle(AluOp.Nop, None, None, addrSrc=AddrSrc.HL))),
+    // ld (bc), a
+    (0x02, Seq(fetchCycle(AluOp.Nop, Some(Reg8.A), None),
+               memWriteCycle(AluOp.Nop, None, None, addrSrc=AddrSrc.BC))),
+    // ld (de), a
+    (0x12, Seq(fetchCycle(AluOp.Nop, Some(Reg8.A), None),
+               memWriteCycle(AluOp.Nop, None, None, addrSrc=AddrSrc.DE))),
+    // ld a, (bc)
+    (0x0A, Seq(fetchCycle(AluOp.Nop, None, None),
+             memReadCycle(AluOp.Nop, Some(Reg8.A), addrSrc=AddrSrc.BC))),
+    // ld a, (de)
+    (0x1A, Seq(fetchCycle(AluOp.Nop, None, None),
+             memReadCycle(AluOp.Nop, Some(Reg8.A), addrSrc=AddrSrc.DE))),
+    // ld (hl), d8
+    (0x36, Seq(fetchCycle(AluOp.Nop, None, None),
+             memReadCycle(AluOp.Nop, None, addrOp=AddrOp.Inc),
+             memWriteCycle(AluOp.Nop, None, None, addrSrc=AddrSrc.HL))),
+    // ld (hl+), a
+    (0x22, Seq(fetchCycle(AluOp.Nop, Some(Reg8.A), None),
+               memWriteCycle(AluOp.Nop, None, None,
+                             addrSrc=AddrSrc.HL, addrOp=AddrOp.Inc))),
+    // ld (hl-), a
+    (0x32, Seq(fetchCycle(AluOp.Nop, Some(Reg8.A), None),
+               memWriteCycle(AluOp.Nop, None, None,
+                             addrSrc=AddrSrc.HL, addrOp=AddrOp.Dec))),
+    // ld a, (hl+)
+    (0x2A, Seq(fetchCycle(AluOp.Nop, None, None),
+               memReadCycle(AluOp.Nop, Some(Reg8.A),
+                            addrSrc=AddrSrc.HL, addrOp=AddrOp.Inc))),
+    // ld a, (hl-)
+    (0x3A, Seq(fetchCycle(AluOp.Nop, None, None),
+               memReadCycle(AluOp.Nop, Some(Reg8.A),
+                            addrSrc=AddrSrc.HL, addrOp=AddrOp.Dec))),
+    // ldh (a8), a
+    (0xE0, Seq(fetchCycle(AluOp.Nop, None, None),
+             memReadCycle(AluOp.Nop, Some(Reg8.Z), addrOp=AddrOp.Inc),
+             memWriteCycle(AluOp.Nop, Some(Reg8.A), None,
+                           addrSrc=AddrSrc.FFZ, addrOp=AddrOp.Nop)))
   )
 
   val DefaultCycle = Microcode(0)._2(0)
@@ -364,6 +435,7 @@ class CpuDecoder extends Component {
     val memRead = out Bool
     val memWrite = out Bool
     val nextAddrSrc = out(AddrSrc())
+    val addrOp = out(AddrOp())
     val nextHalt = out Bool
   }
 
@@ -390,6 +462,7 @@ class CpuDecoder extends Component {
       }
     }
     io.memRead := Bool(cycle.memRead)
+    io.addrOp := cycle.addrOp
     io.nextHalt := Bool(cycle.halt)
 
     // some signals have to be set here for the next cycle
@@ -409,8 +482,17 @@ class CpuDecoder extends Component {
   decodeCycle(DefaultCycle)
   io.nextMCycle := 0
 
+  // track assigned op-codes to prevent repeats
+  var assignedOpCodes = collection.mutable.HashMap[Int, Boolean]()
+    .withDefaultValue(false)
+
   // decode microcode instructions
   for(icode <- Microcode) {
+    if (assignedOpCodes(icode._1)) {
+      throw new RuntimeException(
+        s"Op-code 0x${icode._1.toHexString} already assigned!")
+    }
+    assignedOpCodes(icode._1) = true
     when(io.ir === icode._1) {
       for((cycle, i) <- icode._2.zipWithIndex) {
         when(io.mCycle === i) {
