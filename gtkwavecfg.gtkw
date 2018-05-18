@@ -1,15 +1,15 @@
 [*]
-[*] GTKWave Analyzer v3.3.89 (w)1999-2018 BSI
-[*] Wed May 16 22:38:36 2018
+[*] GTKWave Analyzer v3.3.79 (w)1999-2017 BSI
+[*] Fri May 18 05:55:54 2018
 [*]
-[dumpfile] "/Users/craigjb/Dropbox/craigjb/Projects/slabboy/simWorkspace/SlabBoy/test.vcd"
-[dumpfile_mtime] "Wed May 16 22:34:29 2018"
-[dumpfile_size] 18085
-[savefile] "/Users/craigjb/Dropbox/craigjb/Projects/slabboy/gtkwavecfg.gtkw"
-[timestart] 304
-[size] 1399 812
+[dumpfile] "/home/craigjb/Dropbox/craigjb/Projects/slabboy/simWorkspace/SlabBoy/test.vcd"
+[dumpfile_mtime] "Fri May 18 05:52:10 2018"
+[dumpfile_size] 4027720
+[savefile] "/home/craigjb/Dropbox/craigjb/Projects/slabboy/gtkwavecfg.gtkw"
+[timestart] 458
+[size] 2556 1383
 [pos] -1 -1
-*-4.311047 374 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-2.311047 483 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] TOP.
 [treeopen] TOP.SlabBoy.
 [treeopen] TOP.SlabBoy.cpu_1.
@@ -27,8 +27,11 @@ TOP.SlabBoy.reset
 @22
 +{address} TOP.SlabBoy.io_address[15:0]
 +{dataIn} TOP.SlabBoy.io_dataIn[7:0]
++{dataOut} TOP.SlabBoy.io_dataOut[7:0]
 @28
 +{en} TOP.SlabBoy.io_en
+@29
++{write} TOP.SlabBoy.io_write
 @1000200
 -Bus
 @200
@@ -72,7 +75,7 @@ TOP.SlabBoy.reset
 +{PC} TOP.SlabBoy.cpu_1.registers16_6[15:0]
 @200
 -
-@23
+@22
 +{temp} TOP.SlabBoy.cpu_1.temp[7:0]
 @1000200
 -Registers

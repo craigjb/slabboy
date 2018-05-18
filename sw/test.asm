@@ -44,9 +44,14 @@ ld d, c
 
 ld h, $0
 ld l, $4
-ld a, [HL]
+ld a, [hl]
 ld h, $0
 ld l, $3
-add a, [HL]
+add a, [hl]
+
+ld h, $20
+ld l, $00
+ld b, a
+ld [hl], b
 
 halt
