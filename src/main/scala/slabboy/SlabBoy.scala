@@ -107,6 +107,7 @@ class Cpu(bootVector: Int, spInit: Int) extends Component {
   io.dataOut := temp
 
   val mCycle = Reg(CpuDecoder.MCycleDataType) init(0)
+  val writeCycle = Reg(Bool) init(False)
   val halt = Reg(Bool) init(False)
   io.halt := halt
   val addrSrc = Reg(AddrSrc()) init(AddrSrc.PC)
@@ -131,6 +132,7 @@ class Cpu(bootVector: Int, spInit: Int) extends Component {
         }
         
         mreq := True
+        writeCycle := decoder.io.memWrite
         when(decoder.io.memWrite) {
           write := True
         }
@@ -145,7 +147,7 @@ class Cpu(bootVector: Int, spInit: Int) extends Component {
       whenIsActive {
         when(decoder.io.memRead) {
           temp := io.dataIn
-        }.elsewhen(decoder.io.memWrite) {
+        }.elsewhen(writeCycle) {
           temp := temp
         }.otherwise {
           ir := io.dataIn
