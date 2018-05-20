@@ -7,8 +7,10 @@ import spinal.core.sim._
 import java.nio.file.{Files, Paths}
 
 object TopLevelSim {
+  val MemorySize = 64 * 1024
+
   def loadProgram(path: String): Array[Byte] = {
-    Files.readAllBytes(Paths.get(path))
+    Files.readAllBytes(Paths.get(path)).padTo(MemorySize, 0.toByte)
   }
 
   def coreDump(path: String, mem: Array[Byte]) {
@@ -29,11 +31,8 @@ object TopLevelSim {
           val address = dut.io.address.toInt
           if (dut.io.write.toBoolean) {
             memory(address) = dut.io.dataOut.toInt.toByte
-            dut.clockDomain.waitRisingEdgeWhere(dut.io.en.toBoolean == false)
           } else {
             dut.io.dataIn #= memory(address).toInt & 0xFF
-            dut.clockDomain.waitRisingEdgeWhere(dut.io.en.toBoolean == false)
-            dut.io.dataIn.randomize
           }
         }
       }

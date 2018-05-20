@@ -67,6 +67,33 @@ ld a, [hl+]
 ld a, [hl+]
 ld a, [hl+]
 
+ld a, $7F
 ldh [$27], a
+ld a, $AA
+ldh a, [$27]
+
+ld c, $40
+ld [c], a
+ld a, $AA
+ld a, [c]
+
+ld h, $30
+ld l, $00
+inc [hl]
+inc [hl]
+inc [hl]
+dec [hl]
+
+ld a, $75
+ld [$3040], a
+ld a, $AA
+ld a, [$3040]
+
+scf
+ccf
+ccf
+
+ld a, $0F
+cpl
 
 halt
